@@ -24,7 +24,10 @@ USER appuser
 
 EXPOSE 8000
 
+# Shell form (not exec/array form) so ${PORT} actually expands -- hosts like
+# Render assign their own port via a PORT env var and expect the container to
+# listen on it; 8000 is the local/docker-compose fallback when PORT is unset.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

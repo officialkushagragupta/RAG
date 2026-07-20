@@ -170,6 +170,56 @@ Frontend (`frontend/.env`) settings mostly mirror the backend for display
 purposes and client-side hints only — the backend is always the source of
 truth and re-validates everything server-side.
 
+## Deployment
+
+The backend and frontend deploy to two different free platforms, each
+matched to what it actually runs: the backend is a long-running stateful
+process (Render), the frontend is a Streamlit app (Streamlit Community
+Cloud, built specifically for that). Deploy the backend first — the
+frontend needs its URL.
+
+### 1. Backend → Render
+
+1. Push this repo to GitHub.
+2. In the [Render dashboard](https://dashboard.render.com), choose **New →
+   Blueprint** and select the repo. Render reads `render.yaml` at the repo
+   root and provisions the `rag-backend` web service automatically (Docker
+   build from `backend/Dockerfile`, free plan).
+3. Once created, open the service's **Environment** tab and set
+   `GEMINI_API_KEY` — this is the one secret `render.yaml` deliberately
+   leaves blank (`sync: false`), since it can't be committed to the repo.
+4. Deploy. Render assigns a public URL like
+   `https://rag-backend-xxxx.onrender.com` — note it down for step 2.
+
+Render's free tier spins a service down after about 15 minutes of
+inactivity; the next request wakes it back up, which takes roughly 30–60
+seconds. This fits how the app already treats state (nothing is meant to
+persist across a restart), so no extra handling is needed.
+
+### 2. Frontend → Streamlit Community Cloud
+
+1. In [Streamlit Community Cloud](https://share.streamlit.io), choose
+   **New app**, point it at this repo, and set the main file path to
+   `frontend/app.py`.
+2. Under **Advanced settings**, explicitly select Python 3.11 (a
+   `frontend/runtime.txt` also requests this, but Streamlit Cloud has
+   been known to ignore that file, so the dropdown is the reliable path).
+3. Under the app's **Secrets** manager, add root-level keys (not nested
+   under a `[section]` — Streamlit Cloud only exposes root-level secrets
+   as environment variables, which is what this app's config loader reads):
+   ```toml
+   BACKEND_API_URL = "https://rag-backend-xxxx.onrender.com"
+   ```
+   (using the URL from step 1).
+4. Deploy. You'll get a URL like `https://your-app.streamlit.app`.
+
+### 3. Connect them
+
+Back in Render's **Environment** tab, set `CORS_ORIGINS` to your
+Streamlit Cloud URL from step 2 (replacing the `render.yaml` default of
+`*`), so the backend only accepts requests from your actual frontend.
+Render redeploys automatically on env var changes.
+
 ## Frontend notes
 
 - **`views/`, not `pages/`.** Screens live in `frontend/views/`
