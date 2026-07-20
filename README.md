@@ -1,88 +1,88 @@
 # RAG Document Chatbot
 
-A lightweight Document RAG Chatbot: upload a PDF, ask questions, get
-answers with source citations, plus AI-suggested and follow-up questions.
+A single-document RAG chatbot: upload a PDF, ask natural-language questions
+about it, and get grounded answers with rich, page/section-level citations.
+Built for lightweight, free-tier-friendly deployment rather than
+multi-tenant production scale.
 
-> **Status:** the **frontend is fully implemented** and consumes the
-> backend's REST contract as-is. The **backend's actual RAG logic is
-> not implemented yet** -- PDF parsing, chunking, embedding, retrieval,
-> answer generation, and question generation are all stubs (see the
-> `TODO` / `NotImplementedError` markers throughout `backend/app/services`
-> and `backend/app/api`). Until those are implemented, every backend call
-> from the UI will error -- the frontend's error handling (see "Frontend"
-> below) is what you'll see in the meantime, which is expected.
+## Features
+
+- **PDF upload & indexing** — text and heading structure extracted via
+  PyMuPDF, chunked, embedded, and stored in ChromaDB.
+- **Grounded Q&A with citations** — answers are generated only from
+  retrieved chunks; each citation carries document title, an ordered
+  heading breadcrumb (e.g. *HR Policies → Leave Policy → Annual Leave*),
+  page number, and a preview snippet — not just a bare page number.
+- **Suggested questions** — 5 questions generated immediately after
+  indexing, and 5 fresh contextual follow-ups after every answer, both via
+  Gemini's structured JSON output (no free-text parsing).
+- **Single active document** — no accounts, sessions, or persistence
+  beyond the current process; uploading a new PDF replaces the previous
+  one entirely (index, file, and chat history).
 
 ## Stack
 
-| Layer      | Technology |
-|------------|------------|
-| Backend    | FastAPI, Python 3.11 |
-| LLM        | Gemini (`gemini-3.1-flash-lite`) |
-| Embeddings | Google `gemini-embedding-001` |
-| Vector DB  | ChromaDB (persistent, embedded, single collection) |
-| Orchestration | LangChain |
-| PDF parsing | PyMuPDF |
-| Frontend   | Streamlit |
-| Packaging  | Docker, docker-compose |
+| Layer         | Technology |
+|---------------|------------|
+| Backend       | FastAPI, Python 3.11 |
+| LLM           | Gemini (`gemini-3.1-flash-lite`) |
+| Embeddings    | Gemini (`gemini-embedding-001`, truncated to 768 dims) |
+| Vector DB     | ChromaDB (persistent, embedded, single collection) |
+| Orchestration | LangChain (text splitting), `google-generativeai` (LLM/embeddings) |
+| PDF parsing   | PyMuPDF |
+| Frontend      | Streamlit |
+| Packaging     | Docker, docker-compose |
 
-## Architecture Constraints
+## Architecture
 
-This application is intentionally designed for a **single active document**.
+**Single active document, no sessions.** There is no `session_id`
+anywhere in the API or the code — state is process-global, not scoped to
+a user or session. This keeps the whole system simple: no accounts, no
+database, no Redis, just a running process holding one document's index
+and conversation at a time.
 
-Not implemented, by design:
-- Multi-session support
-- Multiple concurrent documents
-- User authentication
-- Database persistence for chat history
-- Redis
-- SQL databases
+**Uploading a new PDF always replaces the previous one:**
+1. The existing Chroma collection is deleted.
+2. The previous uploaded file is removed from disk.
+3. The chat history is cleared.
+4. The new PDF is parsed, chunked, embedded, and indexed.
+5. 5 new suggested questions are generated.
 
-Behavior:
-- Only one document can be active at a time.
-- When a new PDF is uploaded:
-  1. The existing Chroma collection is deleted.
-  2. The previous uploaded PDF file is removed.
-  3. The existing chat history is cleared.
-  4. A new vector index is generated for the new PDF.
-  5. 5 new recommended questions are generated.
-- Chat history is maintained only for the currently active document.
-- Chat history is stored in memory on the backend (or in Streamlit
-  `session_state` on the frontend) for the duration of the running
-  process -- there is no database or cache backing it, and it does not
-  survive a restart. That's intentional.
+Chat history lives in memory only (`DocumentStateService`) for the
+lifetime of the running backend process — it does not survive a restart,
+and that's intentional: it keeps the app lightweight and deployable on
+free hosting tiers with no database dependency.
 
-This design keeps the application lightweight and suitable for free-tier
-deployment.
-
-## Folder structure
+### Folder structure
 
 ```
 rag/
 ├── backend/
 │   ├── app/
-│   │   ├── api/             # FastAPI route handlers (document, chat, health)
-│   │   ├── services/        # Business logic (PDF/chunk/embedding/vector/rag/llm/question/state) -- stubs
-│   │   ├── models/          # Pydantic request/response schemas (the API's data contract)
-│   │   ├── core/             # Config, prompts, Chroma/Gemini client wiring, custom exceptions
-│   │   ├── middleware/        # Request logging middleware
-│   │   ├── utils/              # Logging setup, fixed constants, input validators
-│   │   └── main.py              # App factory, lifespan (startup/shutdown) checks, CORS, routers
-│   ├── uploads/               # Temp storage for the single active PDF (gitignored, volume-mounted)
-│   ├── chroma_db/              # ChromaDB persistent storage, one collection "document_rag" (gitignored, volume-mounted)
-│   ├── logs/                    # Rotating log files (gitignored, volume-mounted)
+│   │   ├── api/            # FastAPI route handlers (document, chat, health)
+│   │   ├── services/       # Business logic: PDF, chunking, embeddings,
+│   │   │                   #   vector store, RAG, LLM, questions, state
+│   │   ├── models/         # Pydantic request/response schemas
+│   │   ├── core/           # Config, prompts, Chroma/Gemini client wiring, exceptions
+│   │   ├── middleware/     # Request logging
+│   │   ├── utils/          # Logging setup, constants, input validators
+│   │   └── main.py         # App factory, lifespan checks, CORS, routers
+│   ├── uploads/            # Active PDF (gitignored, volume-mounted)
+│   ├── chroma_db/          # ChromaDB storage, collection "document_rag" (gitignored, volume-mounted)
+│   ├── logs/                # Rotating log files (gitignored, volume-mounted)
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── Dockerfile
 │
 ├── frontend/
-│   ├── app.py                 # Streamlit entry point: page config, CSS, session state, routing
-│   ├── views/                   # Top-level screens: upload_view.py, chat_view.py (see "Frontend" below)
-│   ├── components/               # Reusable UI pieces: sidebar, chat_window, uploader, citation,
-│   │                              # suggested_questions, error_banner
-│   ├── services/                  # api_client.py -- HTTP client wrapping the backend REST API
-│   ├── core/                       # Frontend config (backend URL, timeouts, model display labels)
-│   ├── utils/                       # Fixed UI constants + formatting helpers
-│   ├── assets/custom.css
+│   ├── app.py               # Streamlit entry point: page config, CSS, routing
+│   ├── views/                # Top-level screens: upload_view.py, chat_view.py
+│   ├── components/           # sidebar, chat_window, uploader, citation,
+│   │                         #   suggested_questions, error_banner, header
+│   ├── services/              # api_client.py -- HTTP client for the backend REST API
+│   ├── core/                   # Frontend config (backend URL, timeouts, display labels)
+│   ├── utils/                   # Constants + formatting helpers
+│   ├── assets/                   # custom.css, logo/favicon
 │   ├── .streamlit/config.toml
 │   ├── requirements.txt
 │   ├── .env.example
@@ -93,132 +93,22 @@ rag/
 └── README.md
 ```
 
-## Design notes
+## API reference
 
-- **Single active document, no sessions.** There is no `session_id`
-  anywhere in the API. `POST /api/v1/document` uploads a PDF and always
-  replaces whatever was previously active. `GET /api/v1/document` returns
-  the current one (or `null`). `DELETE /api/v1/document` clears it (and
-  its index and history) without requiring a new upload. That's the
-  entire surface the frontend needs: `POST /document`, `GET /document`
-  (optional, on refresh), `POST /chat`, `DELETE /document`.
-- **Flat, self-contained responses -- no follow-up calls.** `POST
-  /api/v1/document` returns `{filename, pages, chunks, status,
-  suggested_questions}` in one shot, so the UI can immediately show the
-  uploaded file, page/chunk counts, and 5 suggested questions without a
-  second request. `POST /api/v1/chat` likewise returns `{answer,
-  citations, suggested_questions}` -- and `suggested_questions` is 5
-  fresh contextual follow-ups generated right after the answer. See
-  `models/schemas.py` (`DocumentInfo`, `ChatResponse`, `Citation`) for the
-  exact shapes.
-- **Citations carry rich metadata, not just a page number.** Each
-  `Citation` is `{filename, document_title, hierarchy, page, chunk_id,
-  chunk_index, total_chunks, char_start, char_end, text}`, where
-  `hierarchy` is an ordered heading breadcrumb (e.g. `["HR Policies",
-  "Leave Policy", "Annual Leave"]`, outermost first), not a single
-  section title. `ChunkService` is expected to derive it by walking
-  PDFService's detected headings with a level-aware stack, and
-  `RAGService` passes both chunk text *and* this metadata into the answer
-  prompt -- not just raw text -- so the model has document/section
-  context and the frontend can render references like "Employee Handbook
-  → HR Policies → Leave Policy → Annual Leave (Page 12)" instead of a
-  bare page number. Chroma metadata values must be primitives, so
-  `hierarchy` needs serializing (e.g. `" > ".join(...)`) on write and
-  parsing back out on read -- see `VectorService`.
-- **Chat is scoped to the active document.** `POST /api/v1/chat` answers
-  against whatever's currently indexed; `GET /api/v1/chat/history` returns
-  the in-memory conversation so far, and `DELETE /api/v1/chat/history`
-  clears just the conversation -- keeping the document, its Chroma
-  collection, and its uploaded file untouched (unlike `DELETE
-  /api/v1/document`, which clears everything). All of it is wiped the
-  moment a new PDF is uploaded.
-- **Debug retrieval diagnostics, gated by a flag.** When
-  `Settings.ENABLE_DEBUG_METADATA` (env `ENABLE_DEBUG_METADATA`, default
-  `false`) is true, `POST /api/v1/chat` additionally returns `debug:
-  {retrieved_chunks, similarity_scores}` -- useful while tuning
-  `CHUNK_SIZE`/`CHUNK_OVERLAP`/retrieval quality. Must stay `false` in
-  production; see `models/schemas.ChatDebugInfo`.
-- **Synchronous upload.** `POST /api/v1/document` blocks until parsing,
-  chunking, embedding, and indexing finish, then returns the document
-  info plus 5 suggested questions in one response.
-- **Suggested questions use Gemini structured output, not free-text
-  parsing.** `QuestionService` is expected to call
-  `LLMService.generate_structured()` with `GenerationConfig(
-  response_mime_type="application/json", response_schema=...)` (see
-  `core/prompts.SUGGESTED_QUESTIONS_RESPONSE_SCHEMA`), so
-  `suggested_questions` is always a clean JSON array of strings -- no
-  regex/markdown-fence stripping of a free-form completion.
-- **Upload validation is real, not stubbed.** Extension, MIME type, and
-  size-limit checks (`app/utils/validators.py`) run before anything is
-  processed. Limits and allowed types are environment-configurable
-  (`MAX_UPLOAD_SIZE_MB`, `ALLOWED_FILE_EXTENSIONS`, `ALLOWED_MIME_TYPES` in
-  `backend/.env`), defaulting to PDF-only, 20 MB.
-- **Startup fails fast.** `main.py`'s lifespan handler verifies Gemini
-  credentials and the ChromaDB connection before the app accepts traffic;
-  either failure aborts startup. `GET /health` re-checks both live for
-  ongoing monitoring.
+All routes are under `API_V1_PREFIX` (default `/api/v1`), except `/health`.
 
-## Frontend
+| Method | Path              | Description |
+|--------|-------------------|-------------|
+| POST   | `/document`       | Upload a PDF; replaces the active document and returns `{filename, pages, chunks, status, suggested_questions}` in one call. |
+| GET    | `/document`       | Return the active document's info, or `null`. |
+| DELETE | `/document`       | Clear the active document, its index, and its chat history. |
+| POST   | `/chat`           | Ask a question; returns `{answer, citations, suggested_questions, debug?}`. |
+| GET    | `/chat/history`   | Return the full conversation history. |
+| DELETE | `/chat/history`   | Clear only the chat history — the document and its index are untouched. |
+| GET    | `/health`          | Liveness + live Gemini/ChromaDB connectivity check. |
 
-The Streamlit UI in `frontend/` is **fully implemented** against the
-backend's REST contract above -- it does not implement or assume any
-backend logic itself.
-
-- **`views/`, not `pages/`.** The spec called for an `app.py` /
-  `components/` / `services/` / `core/` / `utils/` layout with page-level
-  modules. Those live in `frontend/views/` (`upload_view.py`,
-  `chat_view.py`) rather than a directory literally named `pages/`,
-  because Streamlit auto-detects any `pages/` folder next to the entry
-  script and injects its own multipage sidebar navigation -- which would
-  both fight the custom sidebar design and be semantically wrong here
-  (this app transitions between "upload" and "chat" automatically based
-  on whether a document is active, it's not user-driven page navigation).
-  `app.py` picks a view each rerun by calling its `render()` function directly.
-- **State lives in `st.session_state`, not the URL or a backend session.**
-  Active document, chat history, and the current suggested-question chips
-  are all `session_state` keys (`utils/constants.py`), matching the
-  backend's "no sessions" design. `services/api_client.py` is the only
-  module that talks HTTP; every component/view goes through it.
-- **"Clear Chat" calls `DELETE /api/v1/chat/history`.** The chat window's
-  Clear Chat control (`components/chat_window.py`) hits the dedicated
-  endpoint and swaps in the `suggested_questions` it returns (the
-  document's original, upload-time suggestions) -- it does not touch the
-  active document, its index, or its uploaded file.
-- **Upload progress is simulated.** `POST /document` is one synchronous
-  backend call, so "Extracting text... / Creating embeddings... /
-  Indexing document..." (`components/uploader.py`) is a cosmetic sequence
-  around that single request, not real progress events. Streamlit blocks
-  on the same script run while the request is in flight, so the rest of
-  the UI is naturally non-interactive until it completes.
-- **Auto-scroll is a best-effort DOM hack.** Streamlit has no native
-  auto-scroll API; `components/chat_window.py` uses a small embedded-iframe
-  script reaching into the parent document (`window.parent.document`), a
-  common community workaround. It targets Streamlit's internal `.main`
-  class, which may need adjusting across Streamlit versions.
-- **Errors are mapped to friendly messages**, not raw exceptions:
-  `services/api_client.BackendAPIError` carries a `kind`
-  (`timeout`/`unavailable`/`http_error`) and `status_code`;
-  `components/error_banner.py` maps those to the "No document uploaded" /
-  "Upload failed" / "Assistant unavailable" / "Backend unavailable" /
-  "Request timed out" messages, with raw details in a collapsed expander.
-
-## Implementation Notes
-
-- Use a single Chroma collection named `document_rag`
-  (`Settings.CHROMA_COLLECTION_NAME`).
-- Keep all business logic inside the service layer (`app/services/*`) --
-  API handlers stay thin, validating input and delegating.
-- Use Gemini's JSON/structured output mode for `suggested_questions`
-  (`GenerationConfig(response_mime_type="application/json",
-  response_schema=...)`, or LangChain's `with_structured_output`) instead
-  of parsing free-form text -- see `core/prompts.py`.
-- Do not modify the architecture described above (folder structure,
-  config/logging/health/CORS setup, single-document model) beyond what a
-  feature genuinely requires.
-- Build a clean MVP focused on readability and maintainability.
-- Optimize for interview evaluation rather than production-scale
-  features -- no need to over-engineer for concurrency, multi-tenancy, or
-  horizontal scaling.
+Interactive docs are available at `http://localhost:8000/docs` once the
+backend is running.
 
 ## Getting started
 
@@ -228,6 +118,8 @@ backend logic itself.
 cp backend/.env.example backend/.env      # then set GEMINI_API_KEY
 cp frontend/.env.example frontend/.env
 ```
+
+See [Configuration](#configuration) below for what each variable does.
 
 ### 2. Run with Docker (recommended)
 
@@ -243,20 +135,64 @@ docker compose up --build
 ```bash
 # Backend
 cd backend
-python -m venv .venv && .venv\Scripts\activate   # Windows
+python -m venv venv && venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 
 # Frontend (separate terminal)
 cd frontend
-python -m venv .venv && .venv\Scripts\activate
+python -m venv venv && venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Next steps (not yet implemented)
+Run `streamlit run app.py`, not `python app.py` — the latter runs
+Streamlit in "bare mode" with no session context and no server.
 
-- `PDFService`, `ChunkService`, `EmbeddingService`, `VectorService` -- the indexing pipeline, including rich chunk metadata (document title, heading hierarchy, char offsets)
-- `RAGService`, `LLMService` -- retrieval + grounded answer generation, prompting with chunk metadata, and (when `ENABLE_DEBUG_METADATA=true`) surfacing retrieval diagnostics
-- `QuestionService` -- recommended and follow-up question generation via Gemini structured output
-- `DocumentStateService` -- in-memory active-document + chat-history store, including `clear_history()` for `DELETE /chat/history`
+## Configuration
+
+Key backend (`backend/.env`) settings:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `GEMINI_API_KEY` | *(required)* | Startup fails fast if missing/invalid. |
+| `GEMINI_MODEL_NAME` | `gemini-3.1-flash-lite` | Any current Gemini model your API key has access to. |
+| `EMBEDDING_MODEL_NAME` | `models/gemini-embedding-001` | |
+| `EMBEDDING_DIMENSION` | `768` | Truncated via Matryoshka representation learning (native size is 3072; 1536/768 are Google's validated smaller sizes). Smaller = less ChromaDB storage/RAM — chosen for free-tier hosting. Query and document embeddings must always use the same dimension. |
+| `MAX_UPLOAD_SIZE_MB` | `20` | |
+| `ALLOWED_FILE_EXTENSIONS` / `ALLOWED_MIME_TYPES` | `.pdf` / `application/pdf` | |
+| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Passed to LangChain's `RecursiveCharacterTextSplitter`. |
+| `MAX_CHAT_HISTORY_TURNS` | `10` | Bounds in-memory chat history. |
+| `ENABLE_DEBUG_METADATA` | `false` | When `true`, `POST /chat` includes a `debug` block (retrieved chunk count + similarity scores) for tuning retrieval quality. Must stay `false` in production. |
+| `CORS_ORIGINS` | `http://localhost:8501` | Comma-separated, or `*`. |
+
+Frontend (`frontend/.env`) settings mostly mirror the backend for display
+purposes and client-side hints only — the backend is always the source of
+truth and re-validates everything server-side.
+
+## Frontend notes
+
+- **`views/`, not `pages/`.** Screens live in `frontend/views/`
+  (`upload_view.py`, `chat_view.py`) rather than a directory literally
+  named `pages/`, because Streamlit auto-detects a `pages/` folder next
+  to the entry script and injects its own multipage navigation — which
+  would fight the custom sidebar and doesn't fit here anyway (the app
+  switches between upload/chat automatically based on state, it's not
+  user-driven page navigation). `app.py` calls each view's `render()`
+  directly.
+- **No emoji, no default Streamlit look.** The UI follows an editorial
+  black/cream visual theme (`assets/custom.css`, `.streamlit/config.toml`)
+  with a logo mark and matching favicon, plain text labels instead of
+  emoji icons, and Streamlit's default alert/button styling overridden
+  throughout.
+- **Errors never show a raw traceback.** `services/api_client.py` wraps
+  every backend call in `BackendAPIError` (with a `kind` and
+  `status_code`); `components/error_banner.py` maps that to a friendly
+  message. `app.py` also wraps the whole render in a last-resort
+  try/except, and `.streamlit/config.toml` sets `showErrorDetails =
+  "none"` as a final backstop — full tracebacks always still print to the
+  terminal running `streamlit run`, just never to the browser.
+- **"Clear Chat" vs "Clear Current Document."** Clear Chat calls `DELETE
+  /chat/history` (keeps the document and its index); Clear Current
+  Document calls `DELETE /document` (wipes everything). They are
+  deliberately separate controls.
