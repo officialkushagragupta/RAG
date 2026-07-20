@@ -146,8 +146,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Run `streamlit run app.py`, not `python app.py` — the latter runs
-Streamlit in "bare mode" with no session context and no server.
+Run `streamlit run app.py`
 
 ## Configuration
 
