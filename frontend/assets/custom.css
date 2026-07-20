@@ -1,0 +1,199 @@
+/*
+Ardee-inspired theme layered on top of .streamlit/config.toml: black/cream
+editorial palette, serif headings, small-caps "kicker" labels, and card
+sections, echoing the Ardee Foundation site (black header band, warm
+cream body, Playfair Display headings, Inter body text).
+
+Targets Streamlit's internal DOM via data-testid selectors, which is the
+standard (if version-fragile) way to reach past its default styling; if a
+Streamlit upgrade changes these test ids, this file may need small updates.
+*/
+
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+:root {
+    --ardee-black: #0a0a0a;
+    --ardee-cream: #f7f5f0;
+    --ardee-cream-dark: #ece7dd;
+    --ardee-text: #1a1a1a;
+    --ardee-text-muted: #6b6b63;
+    --ardee-border: #ddd7c9;
+    --ardee-white: #ffffff;
+    --font-serif: "Playfair Display", Georgia, serif;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* --- Base ------------------------------------------------------------- */
+
+html, body, [class*="css"] {
+    font-family: var(--font-sans);
+}
+
+.stApp {
+    background-color: var(--ardee-cream);
+}
+
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 3rem;
+    max-width: 900px;
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--font-serif) !important;
+    color: var(--ardee-text) !important;
+    font-weight: 600 !important;
+}
+
+/* --- Header band (components/header.py) -------------------------------- */
+
+.app-header {
+    background-color: var(--ardee-black);
+    color: var(--ardee-white);
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+    margin-bottom: 1.75rem;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+}
+.app-header-logo {
+    height: 42px;
+    width: auto;
+    flex-shrink: 0;
+}
+.app-header-text {
+    display: flex;
+    flex-direction: column;
+}
+.app-header-title {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 1.7rem;
+    letter-spacing: -0.01em;
+}
+.app-header-subtitle {
+    font-family: var(--font-sans);
+    color: #d8d5cc;
+    font-size: 0.95rem;
+    margin-top: 0.35rem;
+}
+
+/* --- Kicker labels: small uppercase, letter-spaced, muted -------------- */
+
+.kicker, .app-kicker {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ardee-text-muted);
+    margin: 0 0 0.4rem 0;
+}
+.app-kicker {
+    color: var(--ardee-text);
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+}
+
+/* --- Document card (sidebar) -------------------------------------------- */
+
+.doc-card {
+    background-color: var(--ardee-cream-dark);
+    border: 1px solid var(--ardee-border);
+    border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.92rem;
+    color: var(--ardee-text);
+}
+.doc-card-status {
+    color: var(--ardee-text-muted);
+    font-size: 0.85rem;
+}
+.doc-card-empty {
+    color: var(--ardee-text-muted);
+    font-style: italic;
+}
+
+/* --- Sidebar -------------------------------------------------------------- */
+
+section[data-testid="stSidebar"] {
+    background-color: var(--ardee-cream-dark);
+    padding-top: 1.25rem;
+    border-right: 1px solid var(--ardee-border);
+}
+section[data-testid="stSidebar"] .stButton > button {
+    width: 100%;
+}
+
+/* --- Buttons: black-outline, Ardee "Browse files" style ------------------- */
+
+.stButton > button {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    background-color: var(--ardee-white);
+    color: var(--ardee-text);
+    border: 1px solid var(--ardee-text);
+    transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+.stButton > button:hover {
+    background-color: var(--ardee-black);
+    color: var(--ardee-white);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* --- Chat message bubbles ------------------------------------------------- */
+
+[data-testid="stChatMessage"] {
+    background-color: var(--ardee-white);
+    border: 1px solid var(--ardee-border);
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+/* --- Metric "cards" (page/chunk counts) ------------------------------------ */
+
+[data-testid="stMetric"] {
+    background-color: var(--ardee-white);
+    border: 1px solid var(--ardee-border);
+    border-radius: 10px;
+    padding: 0.6rem 0.75rem;
+}
+
+/* --- Expanders (citations) -------------------------------------------------- */
+
+.streamlit-expanderHeader {
+    font-size: 0.92rem;
+    border-radius: 8px;
+    background-color: var(--ardee-cream-dark);
+}
+
+/* --- Status / alert boxes: neutral, not Streamlit's default blue/green/red --- */
+
+[data-testid="stAlert"] {
+    background-color: var(--ardee-cream-dark);
+    border: 1px solid var(--ardee-border);
+    border-radius: 10px;
+    color: var(--ardee-text);
+}
+
+/* --- Upload status widget --------------------------------------------------- */
+
+[data-testid="stStatusWidget"] {
+    border-radius: 10px;
+    border: 1px solid var(--ardee-border);
+}
+
+/* --- File uploader ----------------------------------------------------------- */
+
+[data-testid="stFileUploaderDropzone"] {
+    background-color: var(--ardee-white);
+    border: 1px dashed var(--ardee-border);
+    border-radius: 10px;
+}

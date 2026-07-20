@@ -1,0 +1,30 @@
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- Environment / secrets -----------------------------------------------------
+.env
+backend/.env
+frontend/.env
+!*.env.example
+
+# --- App data (persisted via docker volumes / local runs) ------------------------
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/chroma_db/*
+!backend/chroma_db/.gitkeep
+backend/logs/*
+!backend/logs/.gitkeep
+
+# --- IDE / OS -------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

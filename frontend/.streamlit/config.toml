@@ -1,0 +1,31 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+headless = true
+# enableXsrfProtection (default true) requires enableCORS=true to actually
+# enforce the CSRF cookie check -- setting enableCORS=false here would
+# silently disable XSRF protection too, so we leave CORS at its default.
+enableXsrfProtection = true
+# Keep in sync with backend MAX_UPLOAD_SIZE_MB (default 20 MB).
+maxUploadSize = 20
+
+[theme]
+base = "light"
+# Ardee-inspired editorial palette: black/cream, see assets/custom.css for
+# the full theme (fonts, header band, cards) layered on top of this.
+primaryColor = "#0A0A0A"
+backgroundColor = "#F7F5F0"
+secondaryBackgroundColor = "#ECE7DD"
+textColor = "#1A1A1A"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Never show Streamlit's own raw exception/traceback box in the browser --
+# every code path is expected to catch its own errors and render a
+# friendly components.error_banner instead (see app.py's top-level guard
+# for the last-resort case). Full tracebacks still print to the terminal
+# that's running `streamlit run`, so local debugging is unaffected.
+showErrorDetails = "none"

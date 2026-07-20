@@ -1,0 +1,28 @@
+# --- Web framework -----------------------------------------------------------
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# --- Config / validation -------------------------------------------------------
+pydantic==2.10.4
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# --- RAG stack -----------------------------------------------------------------
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-text-splitters==0.3.8
+langchain-google-genai==2.0.7
+chromadb==0.5.23
+google-generativeai==0.8.3
+# chromadb==0.5.23 doesn't pin posthog and calls its old positional-args
+# capture(distinct_id, event, properties) API; newer posthog (4.x+) replaced
+# that with a kwargs-only signature, which crashes chromadb's telemetry calls
+# with "capture() takes 1 positional argument but 3 were given". Pinning to
+# the last 3.x release keeps the call compatible (combined with
+# anonymized_telemetry=False in app/core/chroma_client.py, which then
+# actually takes effect instead of erroring before it's checked).
+posthog==3.7.4
+
+# --- PDF parsing -----------------------------------------------------------------
+pymupdf==1.25.1
